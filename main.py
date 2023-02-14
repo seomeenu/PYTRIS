@@ -74,7 +74,7 @@ arr_timer = 0
 das_timer = 0
 
 arr_frames = 1
-das_frames = 9
+das_frames = 8
 sdf_frames = 0.5
 
 screen_offset = screen_width/2-5*dot_size
@@ -143,8 +143,13 @@ def summon_block(block=None):
         new_block_type = g.bag_blocks.pop(0)
     if len(g.bag_blocks) == 4:
         set_bag()
-
+    
     g.current_block_pos = [3, 0]
+    if new_block_type == O_block:
+        g.current_block_pos = [4, 0]
+    if not can_move(new_block_type, g.current_block_pos, [0, 0]):
+        reset()
+
     g.current_block = new_block_type
     g.current_block_type = new_block_type
     g.current_block_state = 0
@@ -158,6 +163,9 @@ def place_block():
                 y_index = y+g.current_block_pos[1]
                 x_index = x+g.current_block_pos[0]
                 g.grid[y_index][x_index] = dot
+                if y_index == 0:
+                    reset()
+                    return
                 # print(y_index, x_index)
     line_clear()
     summon_block()
@@ -246,7 +254,7 @@ class Game:
         self.current_block_pos = [0, 0]
 
         self.shadow_offset = [0, 0]
-            
+
 g:Game = None
 def reset():
     global g
