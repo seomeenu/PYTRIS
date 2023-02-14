@@ -90,9 +90,6 @@ soft_drop_timer = 0
 gravity_timer = 0
 gravity = 1
 
-lock_delay_timer = 0
-lock_delay_started = False
-
 arr_timer = 0
 das_timer = 0
 
@@ -133,7 +130,6 @@ JLTSZ_offsets = {
 }
  
 def can_move(block, pos, movement):
-# def check_collision(block, pos, movement, placement=True):
     for y, row in enumerate(block):
         for x, dot in enumerate(row):
             if dot != 0:
@@ -142,21 +138,18 @@ def can_move(block, pos, movement):
                 if y_index < len(g.grid):
                     if 0 <= x_index < len(g.grid[y_index]):
                         if g.grid[y_index][x_index] != 0:
-                            # if movement[1] > 0:
-                            #     place_block()
                             return False
                     else:
                         return False
                         
                 else:
-                    # if placement == True:
-                    #     place_block()
                     return False
     return True
 
 def move(movement):
     if movement[1] == 0:
         move_sound.play()
+        reset_lock_delay()
     g.current_block_pos[0] += movement[0]
     g.current_block_pos[1] += movement[1]
 
@@ -185,7 +178,6 @@ def summon_block(block=None):
 
 
 def place_block():
-# if lock_delay_timer <= 0:
     for y, row in enumerate(g.current_block):
         for x, dot in enumerate(row):
             if dot != 0:
@@ -195,11 +187,10 @@ def place_block():
                 if y_index == 0:
                     reset()
                     return
-                # print(y_index, x_index)
     line_clear()
     summon_block()
+    reset_lock_delay(force_reset=True)
     g.holded = False
-    # lock_delay_timer = 0
 
 def line_clear():
     for row in g.grid:
@@ -251,12 +242,9 @@ def rotate(rotation=1):
     elif g.current_block_type == O_block:
         offset_pattern = [[0, 0]]
 
-    # print(f"{g.current_block_state}{temp_state}")
     for offset in offset_pattern:
         real_offset = [offset[0], -offset[1]]
         if can_move(rotated_block, g.current_block_pos, real_offset):
-            # print(offset)
-        # if check_collision(rotated_block, current_block_pos, offset, placement=False):
             g.current_block_pos[0] += real_offset[0]
             g.current_block_pos[1] += real_offset[1]
             g.current_block = rotated_block
@@ -265,9 +253,31 @@ def rotate(rotation=1):
                 g.current_block_state = 3
             elif g.current_block_state == 4:
                 g.current_block_state = 0
-            # print(offset)
             rotate_sound.play()
+            reset_lock_delay(rotating=True)
             break
+
+lock_delay_limit = 6
+def reset_lock_delay(rotating=False, force_reset=False):
+    if g.lock_delay_started or not can_move(g.current_block, g.current_block_pos, [0, 1]):
+        print(g.lock_delay_reset_times)
+        if g.lock_delay_reset_times <= lock_delay_limit or force_reset:
+            g.lock_delay_reset_times += 1
+            
+    if force_reset or (rotating and g.lock_delay_reset_times <= lock_delay_limit):
+        g.lock_delay = 0
+        g.lock_delay_started = False
+        if force_reset:
+            g.lock_delay_reset_times = 0
+
+def set_lock_delay():
+    if not g.lock_delay_started:
+        g.lock_delay = 40
+        g.lock_delay_started = True
+    else:
+        if g.lock_delay <= 0:
+            reset_lock_delay(force_reset=True)
+            place_block()
 
 class Game:
     def __init__(self):
@@ -278,8 +288,6 @@ class Game:
         self.grid = [
             [0 for i in range(10)] for i in range(22)
         ]
-        # for i in grid:
-        #     print(i)
 
         self.current_block = I_block
         self.current_block_type = I_block
@@ -287,6 +295,10 @@ class Game:
         self.current_block_pos = [0, 0]
 
         self.shadow_offset = [0, 0]
+
+        self.lock_delay = 0
+        self.lock_delay_started = False
+        self.lock_delay_reset_times = 0
 
 g:Game = None
 def reset():
@@ -320,9 +332,6 @@ while True:
                     move([-1, 0])
                 das_timer = das_frames
                 arr_timer = 0
-            # if event.key == pygame.K_DOWN:
-            #     if check_collision(g.current_block, g.current_block_pos, [0, 1]):
-            #         g.current_block_pos[1] += 1
             if event.key == pygame.K_UP:
                 rotate()
             if event.key == pygame.K_LCTRL:
@@ -338,11 +347,6 @@ while True:
                     move([0, 1])
                 place_block()
                 hard_drop_sound.play()
-        # if event.type == pygame.KEYUP:
-        #     if event.key == pygame.K_RIGHT:
-        #         das_timer = 0
-        #     if event.key == pygame.K_LEFT:
-        #         das_timer = 0
 
     g.shadow_offset = deepcopy(g.current_block_pos)
 
@@ -352,37 +356,25 @@ while True:
             while soft_drop_timer > 0:
                 soft_drop_timer -= sdf_frames
                 if can_move(g.current_block, g.current_block_pos, [0, 1]):
-                # if check_collision(g.current_block, g.current_block_pos, [0, 1], placement=False):
                     move([0, 1])
                     soft_drop_sound.play()
                     gravity_timer = 0
                 else:
-                    if not lock_delay_started:
-                        lock_delay_timer = 30
-                        lock_delay_started = True
-                    elif lock_delay_timer <= 0:
-                        place_sound.play()
-                        place_block()
-                        lock_delay_started = False
-                    # soft_drop_timer = 0
+                    set_lock_delay()
 
     elif gravity_timer > 60:
         gravity_timer = 0
         if can_move(g.current_block, g.current_block_pos, [0, 1]):
             move([0, 1])
         else:
-            place_block()
-            place_sound.play()
+            set_lock_delay()
+            
     gravity_timer += dt
-    
-    if not keys[pygame.K_DOWN]:
-        lock_delay_started = False
-        lock_delay_timer = 0
-    # if arr_timer >= 0:
-    #     arr_timer -= dt
+
+    if g.lock_delay >= 0:
+        g.lock_delay -= dt
 
     if das_timer >= 0:
-        # print(round(das_timer, 1))
         das_timer -= dt
     elif das_timer <= 0:
         if keys[pygame.K_RIGHT]:
@@ -404,9 +396,6 @@ while True:
                     if can_move(g.current_block, g.current_block_pos, [-1, 0]):
                         move([-1, 0])
         arr_timer += dt
-
-    if lock_delay_timer >= 0:
-        lock_delay_timer -= dt
 
     for y, row in enumerate(g.grid):
         for x, dot in enumerate(row):
