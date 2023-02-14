@@ -9,6 +9,7 @@ pygame.init()
 screen_width = 1280
 screen_height = 720
 screen = pygame.display.set_mode((screen_width, screen_height))
+pygame.display.set_caption("PYTRIS")
 
 clock = pygame.time.Clock()
 
@@ -16,6 +17,28 @@ dot_size = 24
 
 dt = 1
 last_time = time.time()
+
+global_volume = 0.5
+class Sound:
+    def __init__(self, src, volume=0.5):
+        self.sound = pygame.mixer.Sound(src)
+        self.volume = volume
+        self.sound.set_volume(self.volume * global_volume)
+        
+    def play(self):
+        if self.sound.get_volume != self.volume * global_volume:
+            self.sound.set_volume(self.volume * global_volume)
+        self.sound.stop()
+        self.sound.play()
+
+move_sound = Sound("src/move.ogg")
+hard_drop_sound = Sound("src/hard_drop.ogg")
+line_clear_sound = Sound("src/line_clear.ogg")
+hold_sound = Sound("src/hold.ogg")
+rotate_sound = Sound("src/rotate.ogg", 0.3)
+restart_sound = Sound("src/restart.ogg")
+soft_drop_sound = Sound("src/soft_drop.ogg")
+place_sound = Sound("src/place.ogg")
 
 I_color = "#42AFE1"
 I_block = [
@@ -73,11 +96,11 @@ lock_delay_started = False
 arr_timer = 0
 das_timer = 0
 
-arr_frames = 1
-das_frames = 8
+arr_frames = 1.2
+das_frames = 7
 sdf_frames = 0.5
 
-screen_offset = screen_width/2-5*dot_size
+screen_offset = [screen_width/2-5*dot_size, screen_height/2-13*dot_size]
 
 I_offsets = {
     "01": [( 0, 0),(-2, 0),(+1, 0),(-2,-1),(+1,+2)],
@@ -131,6 +154,12 @@ def can_move(block, pos, movement):
                     return False
     return True
 
+def move(movement):
+    if movement[1] == 0:
+        move_sound.play()
+    g.current_block_pos[0] += movement[0]
+    g.current_block_pos[1] += movement[1]
+
 def set_bag():
     random_blocks = deepcopy(all_blocks)
     random.shuffle(random_blocks)
@@ -181,17 +210,20 @@ def line_clear():
         if clear:
             g.grid.remove(row)
             g.grid.insert(0, [0 for i in range(10)])
+            line_clear_sound.play()
 
 def hold():
     if not g.holded:
         if g.hold_block == None:
-            g.hold_block = deepcopy(g.current_block)
+            g.hold_block = deepcopy(g.current_block_type)
             summon_block()
+            hold_sound.play()
             g.holded = True
         else:
             temp_block = deepcopy(g.hold_block)
-            g.hold_block = deepcopy(g.current_block)
+            g.hold_block = deepcopy(g.current_block_type)
             summon_block(deepcopy(temp_block))
+            hold_sound.play()
             g.holded = True
 
 def rotate(rotation=1):
@@ -234,6 +266,7 @@ def rotate(rotation=1):
             elif g.current_block_state == 4:
                 g.current_block_state = 0
             # print(offset)
+            rotate_sound.play()
             break
 
 class Game:
@@ -261,6 +294,7 @@ def reset():
     g = Game()
     set_bag()
     summon_block()
+    restart_sound.play()
 
 reset()
 
@@ -278,12 +312,12 @@ while True:
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_RIGHT:
                 if can_move(g.current_block, g.current_block_pos, [1, 0]):
-                    g.current_block_pos[0] += 1
+                    move([1, 0])
                 das_timer = das_frames
                 arr_timer = 0
             if event.key == pygame.K_LEFT:
                 if can_move(g.current_block, g.current_block_pos, [-1, 0]):
-                    g.current_block_pos[0] -= 1
+                    move([-1, 0])
                 das_timer = das_frames
                 arr_timer = 0
             # if event.key == pygame.K_DOWN:
@@ -301,8 +335,9 @@ while True:
                 reset()
             if event.key == pygame.K_SPACE:
                 while can_move(g.current_block, g.current_block_pos, [0, 1]):
-                    g.current_block_pos[1] += 1
+                    move([0, 1])
                 place_block()
+                hard_drop_sound.play()
         # if event.type == pygame.KEYUP:
         #     if event.key == pygame.K_RIGHT:
         #         das_timer = 0
@@ -318,13 +353,15 @@ while True:
                 soft_drop_timer -= sdf_frames
                 if can_move(g.current_block, g.current_block_pos, [0, 1]):
                 # if check_collision(g.current_block, g.current_block_pos, [0, 1], placement=False):
-                    g.current_block_pos[1] += 1
+                    move([0, 1])
+                    soft_drop_sound.play()
                     gravity_timer = 0
                 else:
                     if not lock_delay_started:
                         lock_delay_timer = 30
                         lock_delay_started = True
                     elif lock_delay_timer <= 0:
+                        place_sound.play()
                         place_block()
                         lock_delay_started = False
                     # soft_drop_timer = 0
@@ -332,9 +369,10 @@ while True:
     elif gravity_timer > 60:
         gravity_timer = 0
         if can_move(g.current_block, g.current_block_pos, [0, 1]):
-            g.current_block_pos[1] += 1
+            move([0, 1])
         else:
             place_block()
+            place_sound.play()
     gravity_timer += dt
     
     if not keys[pygame.K_DOWN]:
@@ -344,18 +382,27 @@ while True:
     #     arr_timer -= dt
 
     if das_timer >= 0:
+        # print(round(das_timer, 1))
         das_timer -= dt
     elif das_timer <= 0:
         if keys[pygame.K_RIGHT]:
-            while arr_timer > 0:
-                arr_timer -= arr_frames
-                if can_move(g.current_block, g.current_block_pos, [1, 0]):
-                    g.current_block_pos[0] += 1
+            if arr_frames == 0:
+                while can_move(g.current_block, g.current_block_pos, [1, 0]):
+                    move([1, 0])
+            else:
+                while arr_timer > 0:
+                    arr_timer -= arr_frames
+                    if can_move(g.current_block, g.current_block_pos, [1, 0]):
+                        move([1, 0])
         if keys[pygame.K_LEFT]:
-            while arr_timer > 0:
-                arr_timer -= arr_frames
-                if can_move(g.current_block, g.current_block_pos, [-1, 0]):
-                    g.current_block_pos[0] -= 1
+            if arr_frames == 0:
+                while can_move(g.current_block, g.current_block_pos, [-1, 0]):
+                    move([-1, 0])
+            else:
+                while arr_timer > 0:
+                    arr_timer -= arr_frames
+                    if can_move(g.current_block, g.current_block_pos, [-1, 0]):
+                        move([-1, 0])
         arr_timer += dt
 
     if lock_delay_timer >= 0:
@@ -365,26 +412,27 @@ while True:
         for x, dot in enumerate(row):
             if dot == 0:
                 if y >= 2:
-                    pygame.draw.rect(screen, "#474C4E", [screen_offset+x*dot_size, y*dot_size, dot_size, dot_size], int(dot_size/16))
+                    pygame.draw.rect(screen, "#474C4E", [screen_offset[0]+x*dot_size, y*dot_size+screen_offset[1], dot_size, dot_size], int(dot_size/16))
             else:
-                pygame.draw.rect(screen, dot, [screen_offset+x*dot_size, y*dot_size, dot_size, dot_size])
+                pygame.draw.rect(screen, dot, [screen_offset[0]+x*dot_size, y*dot_size+screen_offset[1], dot_size, dot_size])
 
     while can_move(g.current_block, g.shadow_offset, [0, 1]):
         g.shadow_offset[1] += 1
     for y, row in enumerate(g.current_block):
         for x, dot in enumerate(row):
             if dot != 0:
-                dot_rect = pygame.Rect(screen_offset+(g.shadow_offset[0]+x)*dot_size, (g.shadow_offset[1]+y)*dot_size, dot_size, dot_size)
-                pygame.draw.rect(screen, "#474C4E", dot_rect)
+                if g.shadow_offset != g.current_block_pos:
+                    dot_rect = pygame.Rect(screen_offset[0]+(g.shadow_offset[0]+x)*dot_size, (g.shadow_offset[1]+y)*dot_size+screen_offset[1], dot_size, dot_size)
+                    pygame.draw.rect(screen, "#474C4E", dot_rect)
 
-                dot_rect = pygame.Rect(screen_offset+(g.current_block_pos[0]+x)*dot_size, (g.current_block_pos[1]+y)*dot_size, dot_size, dot_size)
+                dot_rect = pygame.Rect(screen_offset[0]+(g.current_block_pos[0]+x)*dot_size, (g.current_block_pos[1]+y)*dot_size+screen_offset[1], dot_size, dot_size)
                 pygame.draw.rect(screen, dot, dot_rect)
     
     if g.hold_block:
         for y, row in enumerate(g.hold_block):
             for x, dot in enumerate(row):
                 if dot != 0:
-                    dot_rect = pygame.Rect(screen_offset+x*dot_size-5*dot_size, dot_size*2+y*dot_size, dot_size, dot_size)
+                    dot_rect = pygame.Rect(screen_offset[0]+x*dot_size-5*dot_size, dot_size*2+y*dot_size+screen_offset[1], dot_size, dot_size)
                     if g.holded:
                         pygame.draw.rect(screen, "#474C4E", dot_rect)
                     else:
@@ -394,7 +442,7 @@ while True:
         for y, row in enumerate(block):
             for x, dot in enumerate(row):
                 if dot != 0:
-                    dot_rect = pygame.Rect(screen_offset+dot_size*12+x*dot_size, dot_size*2+order*dot_size*3+y*dot_size, dot_size, dot_size)
+                    dot_rect = pygame.Rect(screen_offset[0]+dot_size*12+x*dot_size, dot_size*2+order*dot_size*3+y*dot_size+screen_offset[1], dot_size, dot_size)
                     pygame.draw.rect(screen, dot, dot_rect)
 
     clock.tick(120)
