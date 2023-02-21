@@ -177,6 +177,7 @@ def summon_block(block=None):
     g.current_block_state = 0
 
 def place_block():
+    g.spin_name = ""
     for y, row in enumerate(g.current_block):
         for x, dot in enumerate(row):
             if dot != 0:
