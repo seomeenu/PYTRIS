@@ -177,7 +177,6 @@ def summon_block(block=None):
     g.current_block_state = 0
 
 def place_block():
-    g.spin_name = ""
     for y, row in enumerate(g.current_block):
         for x, dot in enumerate(row):
             if dot != 0:
@@ -194,6 +193,8 @@ def place_block():
     
     if g.spin_name != "":
         Text(get_text(g.spin_name), screen_offset[0]-3*dot_size, dot_size*6+screen_offset[1], scale=0.6)
+        
+    g.spin_name = ""
 
 def line_clear():
     clear_count = 0
