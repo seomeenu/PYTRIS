@@ -128,7 +128,7 @@ JLTSZ_offsets = {
     "22": [(0, 0)],
     "33": [(0, 0)]
 }
- 
+
 def can_move(block, pos, movement):
     for y, row in enumerate(block):
         for x, dot in enumerate(row):
@@ -176,7 +176,6 @@ def summon_block(block=None):
     g.current_block_type = new_block_type
     g.current_block_state = 0
 
-
 def place_block():
     for y, row in enumerate(g.current_block):
         for x, dot in enumerate(row):
@@ -191,8 +190,12 @@ def place_block():
     summon_block()
     reset_lock_delay(force_reset=True)
     g.holded = False
+    
+    if g.spin_name != "":
+        Text(get_text(g.spin_name), screen_offset[0]-3*dot_size, dot_size*6+screen_offset[1], scale=0.6)
 
 def line_clear():
+    clear_count = 0
     for row in g.grid:
         clear = True
         for dot in row:
@@ -202,6 +205,20 @@ def line_clear():
             g.grid.remove(row)
             g.grid.insert(0, [0 for i in range(10)])
             line_clear_sound.play()
+            clear_count += 1
+
+    if clear_count > 0:
+        offset = 6 if g.spin_name == "" else 7.5
+        g.texts.clear()
+
+        if clear_count == 1:
+            Text(get_text("single"), screen_offset[0]-3*dot_size, dot_size*offset+screen_offset[1])
+        elif clear_count == 2:
+            Text(get_text("double"), screen_offset[0]-3*dot_size, dot_size*offset+screen_offset[1])
+        elif clear_count == 3:
+            Text(get_text("triple"), screen_offset[0]-3*dot_size, dot_size*offset+screen_offset[1])
+        elif clear_count == 4:
+            Text(get_text("quad"), screen_offset[0]-3*dot_size, dot_size*offset+screen_offset[1])
 
 def hold():
     if not g.holded:
@@ -226,23 +243,25 @@ def rotate(rotation=1):
         rotated_block = list(zip(*g.current_block[::-1]))
         rotated_block = list(zip(*rotated_block[::-1]))
 
-    offset_pattern = I_offsets["01"]
-    
     temp_state = g.current_block_state
     temp_state += rotation
     if temp_state == -1:
         temp_state = 3
     elif temp_state == 4:
         temp_state = 0
-        
+
+    key = f"{g.current_block_state}{temp_state}"
+
+    offset_pattern = I_offsets[key]
+    
     if g.current_block_type == I_block:
-        offset_pattern = I_offsets[f"{g.current_block_state}{temp_state}"]
+        offset_pattern = I_offsets[key]
     elif g.current_block_type in JLTSZ_blocks:
-        offset_pattern = JLTSZ_offsets[f"{g.current_block_state}{temp_state}"]
+        offset_pattern = JLTSZ_offsets[key]
     elif g.current_block_type == O_block:
         offset_pattern = [[0, 0]]
 
-    for offset in offset_pattern:
+    for i, offset in enumerate(offset_pattern):
         real_offset = [offset[0], -offset[1]]
         if can_move(rotated_block, g.current_block_pos, real_offset):
             g.current_block_pos[0] += real_offset[0]
@@ -255,12 +274,28 @@ def rotate(rotation=1):
                 g.current_block_state = 0
             rotate_sound.play()
             reset_lock_delay(rotating=True)
+
+            g.spin_name = ""
+            if g.current_block_type == T_block:
+                if key == "01" or key == "03":
+                    if i == 1:
+                        g.spin_name = "mini T-spin"
+                    elif i == 4:
+                        g.spin_name = "T-spin"
+                elif key == "30" or key == "10":
+                    if i == 2:
+                        g.spin_name = "mini T-spin"
+                elif (
+                    g.grid[g.current_block_pos[1]][g.current_block_pos[0]] != 0 or \
+                    g.grid[g.current_block_pos[1]][g.current_block_pos[0]+2] != 0) and \
+                    g.grid[g.current_block_pos[1]+2][g.current_block_pos[0]] != 0 and \
+                    g.grid[g.current_block_pos[1]+2][g.current_block_pos[0]+2] != 0:
+                    g.spin_name = "T-spin"
             break
 
 lock_delay_limit = 6
 def reset_lock_delay(rotating=False, force_reset=False):
     if g.lock_delay_started or not can_move(g.current_block, g.current_block_pos, [0, 1]):
-        print(g.lock_delay_reset_times)
         if g.lock_delay_reset_times <= lock_delay_limit or force_reset:
             g.lock_delay_reset_times += 1
             
@@ -278,9 +313,43 @@ def set_lock_delay():
         if g.lock_delay <= 0:
             reset_lock_delay(force_reset=True)
             place_block()
+ 
+def scale_by(img, scale):
+    return pygame.transform.scale(img, (img.get_width()*scale, img.get_height()*scale))
+
+font = pygame.font.Font("src/Galmuri7.ttf", 32)
+def get_text(text, color="#eeeeee", font=font):
+    return font.render(text, False, color)
+
+class Text:
+    def __init__(self, img, x, y, scale=1):
+        g.texts.append(self)
+        self.img = img
+        self.x, self.y = x, y
+        self.time = 30
+        self.fade = 30
+        self.scale = scale*1.5
+        self.target_scale = scale
+
+    def update(self):
+        self.scale += (self.target_scale-self.scale)/10*dt
+        img = scale_by(self.img, self.scale)
+        screen.blit(img, (self.x-img.get_width()/2, self.y-img.get_height()/2))
+        if self.time < 0:
+            self.fade -= dt
+            self.img.set_alpha((255/30)*self.fade)
+            if self.fade < 0:
+                self.die()
+        else:
+            self.time -= dt
+
+    def die(self):
+        g.texts.remove(self)
 
 class Game:
     def __init__(self):
+        self.texts = []
+
         self.bag_blocks = []
         self.hold_block = None
         self.holded = False
@@ -299,6 +368,8 @@ class Game:
         self.lock_delay = 0
         self.lock_delay_started = False
         self.lock_delay_reset_times = 0
+
+        self.spin_name = ""
 
 g:Game = None
 def reset():
@@ -433,6 +504,9 @@ while True:
                 if dot != 0:
                     dot_rect = pygame.Rect(screen_offset[0]+dot_size*12+x*dot_size, dot_size*2+order*dot_size*3+y*dot_size+screen_offset[1], dot_size, dot_size)
                     pygame.draw.rect(screen, dot, dot_rect)
+
+    for text in g.texts:
+        text.update()
 
     clock.tick(120)
     pygame.display.update()
