@@ -407,8 +407,10 @@ while True:
             pygame.quit()
             sys.exit()
 
-        if g.started:
-            if event.type == pygame.KEYDOWN:
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_r:
+                reset()
+            if g.started:
                 if event.key == pygame.K_RIGHT:
                     if can_move(g.current_block, g.current_block_pos, [1, 0]):
                         move([1, 0])
@@ -427,8 +429,6 @@ while True:
                     rotate(0)
                 if event.key == pygame.K_LSHIFT:
                     hold()
-                if event.key == pygame.K_r:
-                    reset()
                 if event.key == pygame.K_SPACE:
                     while can_move(g.current_block, g.current_block_pos, [0, 1]):
                         move([0, 1])
@@ -437,8 +437,15 @@ while True:
 
     g.shadow_offset = deepcopy(g.current_block_pos)
 
+    for y, row in enumerate(g.grid):
+        for x, dot in enumerate(row):
+            if dot == 0:
+                if y >= 2:
+                    pygame.draw.rect(screen, "#474C4E", [screen_offset[0]+x*dot_size, y*dot_size+screen_offset[1], dot_size, dot_size], int(dot_size/16))
+            else:
+                pygame.draw.rect(screen, dot, [screen_offset[0]+x*dot_size, y*dot_size+screen_offset[1], dot_size, dot_size])
+    
     if g.started:
-
         if keys[pygame.K_DOWN]:
             soft_drop_timer += dt
             if soft_drop_timer >= sdf_frames:
@@ -524,15 +531,6 @@ while True:
                 g.start_time = time.time()
                 summon_block()
 
-
-    for y, row in enumerate(g.grid):
-        for x, dot in enumerate(row):
-            if dot == 0:
-                if y >= 2:
-                    pygame.draw.rect(screen, "#474C4E", [screen_offset[0]+x*dot_size, y*dot_size+screen_offset[1], dot_size, dot_size], int(dot_size/16))
-            else:
-                pygame.draw.rect(screen, dot, [screen_offset[0]+x*dot_size, y*dot_size+screen_offset[1], dot_size, dot_size])
-    
     if g.hold_block:
         for y, row in enumerate(g.hold_block):
             for x, dot in enumerate(row):
