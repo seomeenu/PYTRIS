@@ -222,6 +222,8 @@ def line_clear():
         elif clear_count == 4:
             Text(get_text("quad"), screen_offset[0]-3*dot_size, dot_size*offset+screen_offset[1])
 
+        g.line_cleared += clear_count
+
 def hold():
     if not g.holded:
         if g.hold_block == None:
@@ -323,6 +325,10 @@ font = pygame.font.Font("src/Galmuri7.ttf", 32)
 def get_text(text, color="#eeeeee", font=font):
     return font.render(text, False, color)
 
+def draw_text(text, x, y, color="#eeeeee", font=font):
+    render = font.render(text, False, color)
+    screen.blit(render, (x, y))
+
 class Text:
     def __init__(self, img, x, y, scale=1):
         g.texts.append(self)
@@ -372,13 +378,19 @@ class Game:
         self.lock_delay_reset_times = 0
 
         self.spin_name = ""
+        self.start_time = time.time()
+        self.line_cleared = 0
+
+        self.started = False
+        self.start_timer = 0
+        self.start_countdown = 0
 
 g:Game = None
 def reset():
     global g
     g = Game()
     set_bag()
-    summon_block()
+    # summon_block()
     restart_sound.play()
 
 reset()
@@ -394,81 +406,124 @@ while True:
         if event.type == pygame.QUIT:
             pygame.quit()
             sys.exit()
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_RIGHT:
-                if can_move(g.current_block, g.current_block_pos, [1, 0]):
-                    move([1, 0])
-                das_timer = das_frames
-                arr_timer = 0
-            if event.key == pygame.K_LEFT:
-                if can_move(g.current_block, g.current_block_pos, [-1, 0]):
-                    move([-1, 0])
-                das_timer = das_frames
-                arr_timer = 0
-            if event.key == pygame.K_UP:
-                rotate()
-            if event.key == pygame.K_LCTRL:
-                rotate(-1)
-            if event.key == pygame.K_a:
-                rotate(0)
-            if event.key == pygame.K_LSHIFT:
-                hold()
-            if event.key == pygame.K_r:
-                reset()
-            if event.key == pygame.K_SPACE:
-                while can_move(g.current_block, g.current_block_pos, [0, 1]):
-                    move([0, 1])
-                place_block()
-                hard_drop_sound.play()
+
+        if g.started:
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RIGHT:
+                    if can_move(g.current_block, g.current_block_pos, [1, 0]):
+                        move([1, 0])
+                    das_timer = das_frames
+                    arr_timer = 0
+                if event.key == pygame.K_LEFT:
+                    if can_move(g.current_block, g.current_block_pos, [-1, 0]):
+                        move([-1, 0])
+                    das_timer = das_frames
+                    arr_timer = 0
+                if event.key == pygame.K_UP:
+                    rotate()
+                if event.key == pygame.K_LCTRL:
+                    rotate(-1)
+                if event.key == pygame.K_a:
+                    rotate(0)
+                if event.key == pygame.K_LSHIFT:
+                    hold()
+                if event.key == pygame.K_r:
+                    reset()
+                if event.key == pygame.K_SPACE:
+                    while can_move(g.current_block, g.current_block_pos, [0, 1]):
+                        move([0, 1])
+                    place_block()
+                    hard_drop_sound.play()
 
     g.shadow_offset = deepcopy(g.current_block_pos)
 
-    if keys[pygame.K_DOWN]:
-        soft_drop_timer += dt
-        if soft_drop_timer >= sdf_frames:
-            while soft_drop_timer > 0:
-                soft_drop_timer -= sdf_frames
-                if can_move(g.current_block, g.current_block_pos, [0, 1]):
-                    move([0, 1])
-                    soft_drop_sound.play()
-                    gravity_timer = 0
-                else:
-                    set_lock_delay()
+    if g.started:
 
-    elif gravity_timer > 60:
-        gravity_timer = 0
-        if can_move(g.current_block, g.current_block_pos, [0, 1]):
-            move([0, 1])
-        else:
-            set_lock_delay()
-            
-    gravity_timer += dt
+        if keys[pygame.K_DOWN]:
+            soft_drop_timer += dt
+            if soft_drop_timer >= sdf_frames:
+                while soft_drop_timer > 0:
+                    soft_drop_timer -= sdf_frames
+                    if can_move(g.current_block, g.current_block_pos, [0, 1]):
+                        move([0, 1])
+                        soft_drop_sound.play()
+                        gravity_timer = 0
+                    else:
+                        set_lock_delay()
 
-    if g.lock_delay >= 0:
-        g.lock_delay -= dt
-
-    if das_timer >= 0:
-        das_timer -= dt
-    elif das_timer <= 0:
-        if keys[pygame.K_RIGHT]:
-            if arr_frames == 0:
-                while can_move(g.current_block, g.current_block_pos, [1, 0]):
-                    move([1, 0])
+        elif gravity_timer > 60:
+            gravity_timer = 0
+            if can_move(g.current_block, g.current_block_pos, [0, 1]):
+                move([0, 1])
             else:
-                while arr_timer > 0:
-                    arr_timer -= arr_frames
-                    if can_move(g.current_block, g.current_block_pos, [1, 0]):
+                set_lock_delay()
+                
+        gravity_timer += dt
+
+        if g.lock_delay >= 0:
+            g.lock_delay -= dt
+
+        if das_timer >= 0:
+            das_timer -= dt
+        elif das_timer <= 0:
+            if keys[pygame.K_RIGHT]:
+                if arr_frames == 0:
+                    while can_move(g.current_block, g.current_block_pos, [1, 0]):
                         move([1, 0])
-        if keys[pygame.K_LEFT]:
-            if arr_frames == 0:
-                while can_move(g.current_block, g.current_block_pos, [-1, 0]):
-                    move([-1, 0])
-            else:
-                while arr_timer > 0:
-                    arr_timer -= arr_frames
-                    if can_move(g.current_block, g.current_block_pos, [-1, 0]):
+                else:
+                    while arr_timer > 0:
+                        arr_timer -= arr_frames
+                        if can_move(g.current_block, g.current_block_pos, [1, 0]):
+                            move([1, 0])
+            if keys[pygame.K_LEFT]:
+                if arr_frames == 0:
+                    while can_move(g.current_block, g.current_block_pos, [-1, 0]):
                         move([-1, 0])
-        arr_timer += dt
+                else:
+                    while arr_timer > 0:
+                        arr_timer -= arr_frames
+                        if can_move(g.current_block, g.current_block_pos, [-1, 0]):
+                            move([-1, 0])
+            arr_timer += dt
+
+        while can_move(g.current_block, g.shadow_offset, [0, 1]):
+            g.shadow_offset[1] += 1
+        for y, row in enumerate(g.current_block):
+            for x, dot in enumerate(row):
+                if dot != 0:
+                    if g.shadow_offset != g.current_block_pos:
+                        dot_rect = pygame.Rect(screen_offset[0]+(g.shadow_offset[0]+x)*dot_size, (g.shadow_offset[1]+y)*dot_size+screen_offset[1], dot_size, dot_size)
+                        pygame.draw.rect(screen, "#474C4E", dot_rect)
+
+                    dot_rect = pygame.Rect(screen_offset[0]+(g.current_block_pos[0]+x)*dot_size, (g.current_block_pos[1]+y)*dot_size+screen_offset[1], dot_size, dot_size)
+                    pygame.draw.rect(screen, dot, dot_rect)
+
+        
+        cur_time = time.time()-g.start_time
+        m, s = divmod(cur_time, 60)
+        h, m = divmod(m, 60)
+        if h != 0:
+            draw_text(f"{int(h)}:{int(m)}:{round(s, 3)}", screen_offset[0]+dot_size*12, screen_offset[1]+17*dot_size)
+        else:
+            if m != 0:
+                draw_text(f"{int(m)}:{round(s, 3)}", screen_offset[0]+dot_size*12, screen_offset[1]+17*dot_size)
+            else:
+                draw_text(f"{round(s, 3)}", screen_offset[0]+dot_size*12, screen_offset[1]+17*dot_size)
+    else:
+        g.start_timer += dt
+        if g.start_timer > g.start_countdown*60:
+            text = "ready"
+            if g.start_countdown == 1:
+                text = "set"
+            elif g.start_countdown == 2:
+                text = "GO!"
+            Text(get_text(text), screen_offset[0]+dot_size*5, screen_offset[1]+dot_size*10, 2)
+            g.start_countdown += 1
+            if g.start_countdown == 3:
+                g.started = True
+                g.start_time = time.time()
+                summon_block()
+
 
     for y, row in enumerate(g.grid):
         for x, dot in enumerate(row):
@@ -477,18 +532,6 @@ while True:
                     pygame.draw.rect(screen, "#474C4E", [screen_offset[0]+x*dot_size, y*dot_size+screen_offset[1], dot_size, dot_size], int(dot_size/16))
             else:
                 pygame.draw.rect(screen, dot, [screen_offset[0]+x*dot_size, y*dot_size+screen_offset[1], dot_size, dot_size])
-
-    while can_move(g.current_block, g.shadow_offset, [0, 1]):
-        g.shadow_offset[1] += 1
-    for y, row in enumerate(g.current_block):
-        for x, dot in enumerate(row):
-            if dot != 0:
-                if g.shadow_offset != g.current_block_pos:
-                    dot_rect = pygame.Rect(screen_offset[0]+(g.shadow_offset[0]+x)*dot_size, (g.shadow_offset[1]+y)*dot_size+screen_offset[1], dot_size, dot_size)
-                    pygame.draw.rect(screen, "#474C4E", dot_rect)
-
-                dot_rect = pygame.Rect(screen_offset[0]+(g.current_block_pos[0]+x)*dot_size, (g.current_block_pos[1]+y)*dot_size+screen_offset[1], dot_size, dot_size)
-                pygame.draw.rect(screen, dot, dot_rect)
     
     if g.hold_block:
         for y, row in enumerate(g.hold_block):
@@ -509,6 +552,8 @@ while True:
 
     for text in g.texts:
         text.update()
+
+    draw_text(f"{g.line_cleared}/40", screen_offset[0]+dot_size*12, screen_offset[1]+19*dot_size)
 
     clock.tick(120)
     pygame.display.update()
